@@ -24,9 +24,16 @@ jobs:
 
       - name: Build and push image to Google Artifact Registry
         run: |
-          IMAGE_NAME=asia-southeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/echo-application/go-echo:${{ github.ref_name }}
-          docker build -t $IMAGE_NAME .
-          docker push $IMAGE_NAME
+          # Define the image name and tags
+          IMAGE_NAME=asia-southeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/echo-application/go-echo
+          VERSION_TAG=${{ github.ref_name }}
+
+          # Build the image with multiple tags
+          docker build -t $IMAGE_NAME:$VERSION_TAG -t $IMAGE_NAME:latest .
+
+          # Push both tags to the registry
+          docker push $IMAGE_NAME:$VERSION_TAG
+          docker push $IMAGE_NAME:latest
 
   generate-kustomize-manifests:
     runs-on: ubuntu-latest
