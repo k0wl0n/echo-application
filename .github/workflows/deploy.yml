@@ -40,9 +40,11 @@ jobs:
           IMAGE_TAG=${{ github.ref_name }}
           IMAGE_NAME=asia-southeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/echo-application/go-echo:${{ github.ref_name }}
 
+          echo $IMAGE_TAG
+          echo $IMAGE_NAME
           # Ensure the directory exists
           mkdir -p kustomize/overlays/$IMAGE_TAG
-
+          tree kustomize/overlays/$IMAGE_TAG
           # Generate deployment and service files using envsubst
           envsubst < kustomize/base/deployment.yaml > kustomize/overlays/$IMAGE_TAG/deployment.yaml
           envsubst < kustomize/base/service.yaml > kustomize/overlays/$IMAGE_TAG/service.yaml
@@ -53,7 +55,9 @@ jobs:
           git config --global user.email "wahyuanggana1@gmail.com"
           git config --global user.name "wahyu anggana"
           git clone https://${{ secrets.REPO_TOKEN }}@github.com/k0wl0n/monorepo-echo-application.git
+          pwd
           cd monorepo-echo-application
+          ls -lah
           cp -r ../kustomize/overlays/$IMAGE_TAG ./
           git add .
           git commit -m "Deploy $IMAGE_TAG"
