@@ -80,4 +80,4 @@ jobs:
 
       - name: Deploy to GKE using Kustomize
         run: |
-          kubectl apply -k kustomize/overlays/${{ github.ref_name }}
+          kubectl apply -k overlays/${{ github.ref_name }}
