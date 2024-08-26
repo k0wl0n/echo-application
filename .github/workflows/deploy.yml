@@ -1,0 +1,76 @@
+---
+name: CICD Pipeline
+on:
+  push:
+    tags:
+      - stg-v.*
+      - prod-v.*
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_GAR_SA_KEY }}
+      - name: Configure docker to use the gcloud command-line tool as a credential
+          helper
+        run: |
+          gcloud auth configure-docker asia-southeast1-docker.pkg.dev
+      - name: Build and push image to Google Artifact Registry
+        run: >
+          IMAGE_NAME=asia-southeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID
+          }}/echo-application/go-echo:${{ github.ref_name }}
+
+          docker build -t $IMAGE_NAME .
+
+          docker push $IMAGE_NAME
+  generate-kustomize-manifests:
+    runs-on: ubuntu-latest
+    needs: build-and-push-image
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Generate Kustomize manifests
+        run: >
+          IMAGE_TAG=${{ github.ref_name }}
+
+          IMAGE_NAME=asia-southeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/echo-application/go-echo:${{ github.ref_name }}
+
+          envsubst < kustomize/base/deployment.yaml > kustomize/overlays/$IMAGE_TAG/deployment.yaml
+
+          envsubst < kustomize/base/service.yaml > kustomize/overlays/$IMAGE_TAG/service.yaml
+
+          envsubst < kustomize/base/istio-ingress.yaml > kustomize/overlays/$IMAGE_TAG/istio-ingress.yaml
+      - name: Push Kustomize manifests to GitOps repo
+        run: |
+          git config --global user.email "wahyuanggana1@gmail.com"
+          git config --global user.name "wahyu anggana"
+          git clone https://${{ secrets.GITHUB_REPO_TOKEN }}@github.com/k0wl0n/monorepo-echo-application.git
+          cd monorepo-echo-application
+          cp -r ../kustomize/overlays/$IMAGE_TAG ./
+          git add .
+          git commit -m "Deploy $IMAGE_TAG"
+          git push
+  deploy-to-gke:
+    runs-on: ubuntu-latest
+    needs: generate-kustomize-manifests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up GCloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          credentials_json: ${{ secrets.GCP_GKE_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+      - name: Set up Kubeconfig
+        run: >
+          gcloud container clusters get-credentials primary-gke-cluster --zone
+          asia-southeast1 --project ${{ secrets.GCP_PROJECT_ID }}
+      - name: Deploy to GKE using Kustomize
+        run: |
+          kubectl apply -k kustomize/overlays/${{ github.ref_name }}

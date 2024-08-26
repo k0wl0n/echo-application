@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-echo-service
+spec:
+  type: ClusterIP
+  selector:
+    app: go-echo
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
