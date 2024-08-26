@@ -92,6 +92,8 @@ jobs:
 
       - name: Deploy to GKE using Kustomize
         run: |
+          pwd
+          tree
           cd monorepo-echo-application
           kubectl apply -k overlays/${{ github.ref_name }}
 
