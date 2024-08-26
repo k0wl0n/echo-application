@@ -8,4 +8,4 @@ spec:
     spec:
       containers:
         - name: go-echo-container
-          image: asia-southeast1-docker.pkg.dev/kubernetes-cluster-252525/echo-application/go-echo:stg-v.0.0.4
+          image: asia-southeast1-docker.pkg.dev/kubernetes-cluster-252525/echo-application/go-echo:${IMAGE_TAG}
