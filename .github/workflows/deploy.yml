@@ -67,24 +67,31 @@ jobs:
     runs-on: ubuntu-latest
     needs: generate-kustomize-manifests
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_GKE_SA_KEY }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
+      - name: Clone GitOps Repository
+        run: |
+          git clone https://${{ secrets.REPO_TOKEN }}@github.com/k0wl0n/monorepo-echo-application.git
+          pwd
+          cd monorepo-echo-application
+          ls -lah
+
+      - name: Set up GCloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          credentials_json: ${{ secrets.GCP_GKE_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
       - name: Set up Kubeconfig
         run: |
-          gcloud config set account terraform-sa@kubernetes-cluster-252525.iam.gserviceaccount.com
-          gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
           gcloud container clusters get-credentials primary-gke-cluster --zone asia-southeast1 --project ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Deploy to GKE using Kustomize
         run: |
-          pwd
-          ls -lah
-          tree 
+          cd monorepo-echo-application
           kubectl apply -k overlays/${{ github.ref_name }}
+
