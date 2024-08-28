@@ -61,17 +61,6 @@ jobs:
           kustomize edit set image go-echo=asia-southeast1-docker.pkg.dev/kubernetes-cluster-252525/echo-application/go-echo:$IMAGE_TAG
           cat kustomization.yml
           cd ..
-          
-      - name: Commit files
-        run: |
-          git config --global user.email "wahyuanggana1@gmail.com"
-          git config --global user.name "wahyu anggana"
-          git commit -am "rolling image to tag $GITHUB_SHA"
-
-      - name: Push changes
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.REPO_TOKEN }}
 
       - name: Push Kustomize manifests to GitOps repo
         run: |
