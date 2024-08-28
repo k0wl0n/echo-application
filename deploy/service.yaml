@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: go-echo-service
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: go-echo
   ports:

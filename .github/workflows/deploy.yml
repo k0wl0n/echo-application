@@ -8,6 +8,8 @@ on:
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
+    env:
+      IMAGE_TAG: ${{ github.ref_name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -28,6 +30,8 @@ jobs:
           IMAGE_NAME=asia-southeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/echo-application/go-echo
           VERSION_TAG=${{ github.ref_name }}
 
+          cd go-echo
+
           # Build the image with multiple tags
           docker build -t $IMAGE_NAME:$VERSION_TAG -t $IMAGE_NAME:latest .
 
@@ -37,29 +41,37 @@ jobs:
 
   generate-kustomize-manifests:
     runs-on: ubuntu-latest
+    env:
+      IMAGE_TAG: ${{ github.ref_name }}
     needs: build-and-push-image
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Generate Kustomize manifests
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v1
+        with:
+          kustomize-version: "3.6.1"
+      
+      - name: Update Kubernetes resources
+        env:
+          IMAGE_TAG: ${{ github.ref_name }}
         run: |
-          IMAGE_TAG=${{ github.ref_name }}
-          IMAGE_NAME=asia-southeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/echo-application/go-echo:${{ github.ref_name }}
+          cd deploy
+          kustomize edit set image go-echo=asia-southeast1-docker.pkg.dev/kubernetes-cluster-252525/echo-application/go-echo:$IMAGE_TAG
+          cat kustomization.yml
+          cd ..
+          
+      - name: Commit files
+        run: |
+          git config --global user.email "wahyuanggana1@gmail.com"
+          git config --global user.name "wahyu anggana"
+          git commit -am "rolling image to tag $GITHUB_SHA"
 
-          # Create directory for the overlay if it doesn't exist
-          mkdir -p kustomize/overlays/$IMAGE_TAG
-
-          # Generate the kustomization.yaml file
-          echo "resources:" > kustomize/overlays/$IMAGE_TAG/kustomization.yaml
-          echo "  - deployment.yaml" >> kustomize/overlays/$IMAGE_TAG/kustomization.yaml
-          echo "  - service.yaml" >> kustomize/overlays/$IMAGE_TAG/kustomization.yaml
-          echo "  - istio-ingress.yaml" >> kustomize/overlays/$IMAGE_TAG/kustomization.yaml
-
-          # Generate deployment and service files using envsubst
-          envsubst < kustomize/base/deployment.yaml > kustomize/overlays/$IMAGE_TAG/deployment.yaml
-          envsubst < kustomize/base/service.yaml > kustomize/overlays/$IMAGE_TAG/service.yaml
-          envsubst < kustomize/base/istio-ingress.yaml > kustomize/overlays/$IMAGE_TAG/istio-ingress.yaml
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push Kustomize manifests to GitOps repo
         run: |
@@ -67,46 +79,48 @@ jobs:
           git config --global user.name "wahyu anggana"
           git clone https://${{ secrets.REPO_TOKEN }}@github.com/k0wl0n/monorepo-echo-application.git
           cd monorepo-echo-application
-          cp -r ../kustomize/overlays/$IMAGE_TAG ./
+          cp -r ../deploy ./go-echo
           git add .
-          git commit -m "Deploy $IMAGE_TAG"
+          git commit -m "Deploy to tag $IMAGE_TAG"
           git push
 
-  deploy-to-gke:
-    runs-on: ubuntu-latest
-    needs: generate-kustomize-manifests
-    steps:
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          credentials_json: ${{ secrets.GCP_GKE_SA_KEY }}
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
+  # deploy-to-gke:
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     IMAGE_TAG: ${{ github.ref_name }}
+  #   needs: generate-kustomize-manifests
+  #   steps:
+  #     - name: Authenticate to Google Cloud
+  #       uses: google-github-actions/auth@v1
+  #       with:
+  #         credentials_json: ${{ secrets.GCP_GKE_SA_KEY }}
+  #         project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Clone GitOps Repository
-        run: |
-          git clone https://${{ secrets.REPO_TOKEN }}@github.com/k0wl0n/monorepo-echo-application.git
-          pwd
-          cd monorepo-echo-application
-          ls -lah
+  #     - name: Clone GitOps Repository
+  #       run: |
+  #         git clone https://${{ secrets.REPO_TOKEN }}@github.com/k0wl0n/monorepo-echo-application.git
+  #         pwd
+  #         cd monorepo-echo-application
+  #         ls -lah
 
-      - name: Set up GCloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          credentials_json: ${{ secrets.GCP_GKE_SA_KEY }}
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
+  #     - name: Set up GCloud SDK
+  #       uses: google-github-actions/setup-gcloud@v1
+  #       with:
+  #         credentials_json: ${{ secrets.GCP_GKE_SA_KEY }}
+  #         project_id: ${{ secrets.GCP_PROJECT_ID }}
       
-      - name: Install gke-gcloud-auth-plugin
-        run: |
-          sudo apt-get update && sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
+  #     - name: Install gke-gcloud-auth-plugin
+  #       run: |
+  #         sudo apt-get update && sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
 
-      - name: Set up Kubeconfig
-        run: |
-          gcloud container clusters get-credentials primary-gke-cluster --zone asia-southeast1 --project ${{ secrets.GCP_PROJECT_ID }}
+  #     - name: Set up Kubeconfig
+  #       run: |
+  #         gcloud container clusters get-credentials primary-gke-cluster --zone asia-southeast1 --project ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Deploy to GKE using Kustomize
-        run: |
-          cd monorepo-echo-application
-          ls -lah overlays/${{ github.ref_name }}
-          cat overlays/${{ github.ref_name }}/kustomization.yaml
-          kubectl apply -k overlays/${{ github.ref_name }} --validate=false
+  #     - name: Deploy to GKE using Kustomize
+  #       run: |
+  #         cd monorepo-echo-application
+  #         ls -lah overlays/${{ github.ref_name }}
+  #         cat overlays/${{ github.ref_name }}/kustomization.yaml
+  #         kubectl apply -k overlays/${{ github.ref_name }} --validate=false
 
