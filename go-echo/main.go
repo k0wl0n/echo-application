@@ -20,7 +20,7 @@ func main() {
 	e.GET("/v1", func(c echo.Context) error {
 		age := c.QueryParam("age")
 		if age == "" {
-			age = "12"
+			age = "15"
 		}
 		return c.String(http.StatusOK, "Hello, your age "+age+"!")
 	})
